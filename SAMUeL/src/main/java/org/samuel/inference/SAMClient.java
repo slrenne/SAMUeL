@@ -1,0 +1,41 @@
+package org.samuel.inference;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+
+/**
+ * HTTP client for SAM FastAPI backend.
+ */
+public class SAMClient {
+
+    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper;
+    private final String endpoint;
+
+    public SAMClient(String endpoint) {
+        this.endpoint = endpoint;
+        this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+        this.objectMapper = new ObjectMapper();
+    }
+
+    public SAMResponse segment(SAMRequest request) throws IOException, InterruptedException {
+        String json = objectMapper.writeValueAsString(request);
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create(endpoint + "/segment"))
+                .timeout(Duration.ofMinutes(2))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+        HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            throw new IOException("SAM server error " + response.statusCode() + ": " + response.body());
+        }
+        return objectMapper.readValue(response.body(), SAMResponse.class);
+    }
+}
