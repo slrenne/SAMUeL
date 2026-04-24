@@ -10,6 +10,8 @@ public class SAMRequest {
 
     private String tileId;
     private String image;
+    private String modelType;
+    private boolean useGpu = true;
     private final List<List<Double>> points = new ArrayList<>();
     private final List<List<Double>> boxes = new ArrayList<>();
 
@@ -35,5 +37,21 @@ public class SAMRequest {
 
     public List<List<Double>> getBoxes() {
         return boxes;
+    }
+
+    public String getModelType() {
+        return modelType;
+    }
+
+    public void setModelType(String modelType) {
+        this.modelType = modelType;
+    }
+
+    public boolean isUseGpu() {
+        return useGpu;
+    }
+
+    public void setUseGpu(boolean useGpu) {
+        this.useGpu = useGpu;
     }
 }

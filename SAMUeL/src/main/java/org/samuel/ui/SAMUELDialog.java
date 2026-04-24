@@ -4,8 +4,6 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.layout.BorderPane;
-import org.samuel.prompts.PromptBuilder;
-
 import java.util.Optional;
 
 /**
@@ -24,10 +22,13 @@ public class SAMUELDialog {
             boolean useGpu,
             boolean saveMasks,
             boolean generateManuscript,
-            String outputType
+            String outputType,
+            String targetMode,
+            boolean usePromptClass,
+            String backendUrl
     ) { }
 
-    public Optional<Config> showAndWait(PromptBuilder promptBuilder) {
+    public Optional<Config> showAndWait() {
         Dialog<Config> dialog = new Dialog<>();
         dialog.setTitle("SAMUeL configuration");
         ButtonType runButton = new ButtonType("Run", ButtonBar.ButtonData.OK_DONE);
@@ -47,7 +48,10 @@ public class SAMUELDialog {
                         panel.isUseGpu(),
                         panel.isSaveMasks(),
                         panel.isGenerateManuscript(),
-                        panel.getOutputType()
+                        panel.getOutputType(),
+                        panel.getTargetMode(),
+                        panel.isUsePromptClass(),
+                        panel.getBackendUrl()
                 );
             }
             return null;
