@@ -25,16 +25,20 @@ public class SAMUELDialog {
             String outputType,
             String targetMode,
             boolean usePromptClass,
-            String backendUrl
+            String backendUrl,
+            boolean autoStartBackend,
+            String pythonExe,
+            String backendDir
     ) { }
 
-    public Optional<Config> showAndWait() {
+    public Optional<Config> showAndWait(Runnable installDependenciesAction) {
         Dialog<Config> dialog = new Dialog<>();
         dialog.setTitle("SAMUeL configuration");
         ButtonType runButton = new ButtonType("Run", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(runButton, ButtonType.CANCEL);
 
         SettingsPanel panel = new SettingsPanel();
+        panel.setOnInstallDependencies(installDependenciesAction);
         BorderPane root = new BorderPane(panel);
         dialog.getDialogPane().setContent(root);
 
@@ -51,7 +55,10 @@ public class SAMUELDialog {
                         panel.getOutputType(),
                         panel.getTargetMode(),
                         panel.isUsePromptClass(),
-                        panel.getBackendUrl()
+                        panel.getBackendUrl(),
+                        panel.isAutoStartBackend(),
+                        panel.getPythonExe(),
+                        panel.getBackendDir()
                 );
             }
             return null;

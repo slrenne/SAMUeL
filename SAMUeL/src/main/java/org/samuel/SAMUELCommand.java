@@ -1,5 +1,6 @@
 package org.samuel;
 
+import javafx.application.Platform;
 import org.controlsfx.control.action.Action;
 import org.samuel.inference.SAMClient;
 import org.samuel.inference.SAMRequest;
@@ -15,6 +16,7 @@ import org.samuel.tiling.TileManager;
 import org.samuel.ui.SAMUELDialog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import javafx.scene.control.Alert;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.tools.MenuTools;
@@ -30,8 +32,13 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.util.stream.Collectors;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -39,6 +46,7 @@ import java.util.Collection;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.prefs.Preferences;
 
 /**
  * Main command handler exposed in QuPath menu.
@@ -46,7 +54,10 @@ import java.util.Map;
 public class SAMUELCommand {
 
     private static final Logger logger = LoggerFactory.getLogger(SAMUELCommand.class);
+    private static final Preferences PREFS = Preferences.userNodeForPackage(SAMUELCommand.class);
+    private static final String PREF_VENV_PYTHON = "venvPython";
     private final QuPathGUI quPathGUI;
+    private Process lastBackendProcess;
 
     public SAMUELCommand(QuPathGUI quPathGUI) {
         this.quPathGUI = quPathGUI;
@@ -70,7 +81,7 @@ public class SAMUELCommand {
             Collection<PathObject> annotationCollection = hierarchy.getAnnotationObjects();
             List<PathObject> annotations = new ArrayList<>(annotationCollection);
             SAMUELDialog dialog = new SAMUELDialog();
-            var configOpt = dialog.showAndWait();
+            var configOpt = dialog.showAndWait(() -> installBackendDependenciesInteractive());
             if (configOpt.isEmpty()) {
                 return;
             }
@@ -93,6 +104,7 @@ public class SAMUELCommand {
 
             ImageServer<BufferedImage> server = imageData.getServer();
             SAMClient client = new SAMClient(config.backendUrl().isBlank() ? "http://127.0.0.1:8000" : config.backendUrl());
+            ensureBackendAvailable(client, config);
             TileManager tileManager = new TileManager();
             MaskDecoder decoder = new MaskDecoder();
             MaskToPathObject converterToObject = new MaskToPathObject();
@@ -138,6 +150,7 @@ public class SAMUELCommand {
             logger.info("SAMUeL finished with {} tiles and {} objects", tileCount, objectCount);
         } catch (Exception e) {
             logger.error("SAMUeL failed", e);
+            showAlert(Alert.AlertType.ERROR, "SAMUeL error", e.getMessage() == null ? "Unexpected failure" : e.getMessage());
         }
     }
 
@@ -175,7 +188,9 @@ public class SAMUELCommand {
     private List<PathObject> resolvePrompts(SAMUELDialog.Config config, List<PathObject> annotations, PathObjectHierarchy hierarchy) {
         if (config.usePromptClass()) {
             return annotations.stream()
-                    .filter(o -> o.getPathClass() != null && "prompt".equalsIgnoreCase(o.getPathClass().toString()))
+                    .filter(o -> o.getPathClass() != null
+                            && o.getPathClass().getName() != null
+                            && "prompt".equalsIgnoreCase(o.getPathClass().getName()))
                     .toList();
         }
         return new ArrayList<>(hierarchy.getSelectionModel().getSelectedObjects());
@@ -196,6 +211,254 @@ public class SAMUELCommand {
             case "selected" -> new ArrayList<>(hierarchy.getSelectionModel().getSelectedObjects());
             default -> new ArrayList<>(hierarchy.getSelectionModel().getSelectedObjects());
         };
+    }
+
+    private void ensureBackendAvailable(SAMClient client, SAMUELDialog.Config config) throws IOException, InterruptedException {
+        if (client.isHealthy()) {
+            return;
+        }
+        if (config.autoStartBackend()) {
+            startBackendProcess(config);
+            for (int i = 0; i < 15; i++) {
+                Thread.sleep(1000);
+                if (client.isHealthy()) {
+                    showAlert(Alert.AlertType.INFORMATION, "SAMUeL backend", "Python backend started successfully.");
+                    return;
+                }
+                if (lastBackendProcess != null && !lastBackendProcess.isAlive()) {
+                    break;
+                }
+            }
+        }
+        String diagnostics = readBackendProcessOutput();
+        throw new IOException("Cannot reach SAM backend at " + config.backendUrl()
+                + ". Start it manually or enable Auto-start and verify Python executable/backend directory."
+                + (diagnostics.isBlank() ? "" : "\nBackend startup log:\n" + diagnostics));
+    }
+
+    private void startBackendProcess(SAMUELDialog.Config config) throws IOException {
+        String pythonExe = resolvePythonExecutable(config.pythonExe());
+        Path backendDir = resolveBackendDirectory(config.backendDir());
+        String[] hostPort = parseHostPort(config.backendUrl());
+        List<String> command = new ArrayList<>();
+        command.add(pythonExe);
+        if ("py".equalsIgnoreCase(pythonExe)) {
+            command.add("-3");
+        }
+        command.add("-m");
+        command.add("uvicorn");
+        command.add("server:app");
+        command.add("--host");
+        command.add(hostPort[0]);
+        command.add("--port");
+        command.add(hostPort[1]);
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.directory(backendDir.toFile());
+        pb.redirectErrorStream(true);
+        lastBackendProcess = pb.start();
+    }
+
+    private String resolvePythonExecutable(String configured) throws IOException {
+        List<String> candidates = new ArrayList<>();
+        String persistedVenv = PREFS.get(PREF_VENV_PYTHON, "").trim();
+        if (!persistedVenv.isBlank()) {
+            candidates.add(persistedVenv);
+        }
+        if (configured != null && !configured.isBlank()) {
+            candidates.add(configured.trim());
+        } else {
+            candidates.add("python");
+        }
+        String userHome = System.getProperty("user.home");
+        candidates.add(userHome + "\\AppData\\Local\\Programs\\Python\\Python313\\python.exe");
+        candidates.add(userHome + "\\AppData\\Local\\Programs\\Python\\Python312\\python.exe");
+        candidates.add(userHome + "\\AppData\\Local\\Programs\\Python\\Python311\\python.exe");
+        candidates.add(userHome + "\\AppData\\Local\\Programs\\Python\\Python310\\python.exe");
+        candidates.add("py");
+
+        for (String candidate : candidates) {
+            if (isPythonRunnable(candidate)) {
+                return candidate;
+            }
+        }
+        throw new IOException("No working Python executable found. Please set an absolute path to python.exe in SAMUeL settings.");
+    }
+
+    private boolean isPythonRunnable(String candidate) {
+        try {
+            ProcessBuilder pb;
+            if ("py".equalsIgnoreCase(candidate)) {
+                pb = new ProcessBuilder(candidate, "-3", "--version");
+            } else {
+                pb = new ProcessBuilder(candidate, "--version");
+            }
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            int code = p.waitFor();
+            return code == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String readBackendProcessOutput() {
+        if (lastBackendProcess == null) {
+            return "";
+        }
+        if (lastBackendProcess.isAlive()) {
+            return "";
+        }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(lastBackendProcess.getInputStream()))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            int lines = 0;
+            while ((line = reader.readLine()) != null && lines < 25) {
+                sb.append(line).append(System.lineSeparator());
+                lines++;
+            }
+            return sb.toString().trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private void installBackendDependenciesInteractive() {
+        Thread installer = new Thread(() -> {
+            try {
+                Path backendDir = resolveBackendDirectory("python-backend");
+                Path requirements = backendDir.resolve("requirements.txt");
+                if (!Files.exists(requirements)) {
+                    throw new IOException("requirements.txt not found in backend directory: " + backendDir);
+                }
+
+                String basePython = resolvePythonExecutable("python");
+                Path venvDir = getDefaultVenvDir();
+                String venvPython = getVenvPythonPath(venvDir);
+
+                if (!Files.exists(Path.of(venvPython))) {
+                    List<String> createVenvCommand = new ArrayList<>();
+                    createVenvCommand.add(basePython);
+                    if ("py".equalsIgnoreCase(basePython)) {
+                        createVenvCommand.add("-3");
+                    }
+                    createVenvCommand.add("-m");
+                    createVenvCommand.add("venv");
+                    createVenvCommand.add(venvDir.toAbsolutePath().toString());
+                    runCommand(createVenvCommand, backendDir);
+                }
+
+                runCommand(List.of(venvPython, "-m", "pip", "install", "--upgrade", "pip"), backendDir);
+                String output = runCommand(
+                        List.of(venvPython, "-m", "pip", "install", "-r", requirements.toAbsolutePath().toString()),
+                        backendDir
+                );
+                PREFS.put(PREF_VENV_PYTHON, venvPython);
+
+                String message = "Backend dependencies installed in SAMUeL venv:\n" + venvPython;
+                if (!output.isBlank()) {
+                    String preview = output.lines().skip(Math.max(0, output.lines().count() - 10)).collect(Collectors.joining(System.lineSeparator()));
+                    message += System.lineSeparator() + System.lineSeparator() + preview;
+                }
+                final String finalMessage = message;
+                Platform.runLater(() -> showAlert(Alert.AlertType.INFORMATION, "SAMUeL setup", finalMessage));
+            } catch (Exception e) {
+                Platform.runLater(() -> showAlert(
+                        Alert.AlertType.ERROR,
+                        "Install dependencies failed",
+                        e.getMessage() == null ? "Unknown error" : e.getMessage()
+                ));
+            }
+        }, "samuel-install-dependencies");
+        installer.setDaemon(true);
+        installer.start();
+    }
+
+    private String runCommand(List<String> command, Path workingDirectory) throws IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.directory(workingDirectory.toFile());
+        pb.redirectErrorStream(true);
+        Process p = pb.start();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append(System.lineSeparator());
+            }
+            int code = p.waitFor();
+            String out = sb.toString();
+            if (code != 0) {
+                throw new IOException("Command failed: " + String.join(" ", command) + System.lineSeparator() + out);
+            }
+            return out;
+        }
+    }
+
+    private Path getDefaultVenvDir() {
+        return Paths.get(System.getProperty("user.home"), ".samuel", "venv");
+    }
+
+    private String getVenvPythonPath(Path venvDir) {
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {
+            return venvDir.resolve("Scripts").resolve("python.exe").toString();
+        }
+        return venvDir.resolve("bin").resolve("python").toString();
+    }
+
+    private Path resolveBackendDirectory(String configuredDir) throws IOException {
+        List<Path> candidates = new ArrayList<>();
+        if (configuredDir != null && !configuredDir.isBlank()) {
+            Path direct = Paths.get(configuredDir);
+            candidates.add(direct);
+            candidates.add(Paths.get(System.getProperty("user.dir")).resolve(configuredDir));
+        } else {
+            candidates.add(Paths.get("python-backend"));
+            candidates.add(Paths.get(System.getProperty("user.dir")).resolve("python-backend"));
+        }
+        for (Path candidate : candidates) {
+            if (Files.isDirectory(candidate) && Files.exists(candidate.resolve("server.py"))) {
+                return candidate.toAbsolutePath().normalize();
+            }
+        }
+        return extractBundledBackend();
+    }
+
+    private Path extractBundledBackend() throws IOException {
+        String[] files = {"server.py", "sam_model.py", "tile_inference.py", "manuscript_generator.py", "requirements.txt"};
+        Path tempDir = Files.createTempDirectory("samuel-python-backend-");
+        for (String file : files) {
+            try (InputStream inputStream = SAMUELCommand.class.getResourceAsStream("/python-backend/" + file)) {
+                if (inputStream == null) {
+                    throw new IOException("Missing bundled backend resource: " + file);
+                }
+                Files.copy(inputStream, tempDir.resolve(file));
+            }
+        }
+        tempDir.toFile().deleteOnExit();
+        return tempDir;
+    }
+
+    private String[] parseHostPort(String backendUrl) {
+        String fallbackHost = "127.0.0.1";
+        String fallbackPort = "8000";
+        if (backendUrl == null || backendUrl.isBlank()) {
+            return new String[]{fallbackHost, fallbackPort};
+        }
+        try {
+            var uri = java.net.URI.create(backendUrl);
+            String host = uri.getHost() == null || uri.getHost().isBlank() ? fallbackHost : uri.getHost();
+            int port = uri.getPort() <= 0 ? Integer.parseInt(fallbackPort) : uri.getPort();
+            return new String[]{host, Integer.toString(port)};
+        } catch (Exception e) {
+            return new String[]{fallbackHost, fallbackPort};
+        }
+    }
+
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 
     private String toBase64Png(BufferedImage image) throws IOException {

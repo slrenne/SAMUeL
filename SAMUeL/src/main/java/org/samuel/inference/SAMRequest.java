@@ -1,5 +1,6 @@
 package org.samuel.inference;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -8,11 +9,22 @@ import java.util.List;
  */
 public class SAMRequest {
 
+    @JsonProperty("tile_id")
     private String tileId;
+
+    @JsonProperty("image")
     private String image;
+
+    @JsonProperty("model_type")
     private String modelType;
+
+    @JsonProperty("use_gpu")
     private boolean useGpu = true;
+
+    @JsonProperty("points")
     private final List<List<Double>> points = new ArrayList<>();
+
+    @JsonProperty("boxes")
     private final List<List<Double>> boxes = new ArrayList<>();
 
     public String getTileId() {

@@ -38,4 +38,30 @@ public class SAMClient {
         }
         return objectMapper.readValue(response.body(), SAMResponse.class);
     }
+    
+    public void printRequest(SAMRequest request) {
+        try {
+            String json = objectMapper.writeValueAsString( request.getTileId() );
+            System.out.println("---- SAM REQUEST ----");
+            System.out.println("Length: " + json.length());
+            System.out.println(json.substring(0, Math.min(500, json.length())));
+            System.out.println("---------------------");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean isHealthy() {
+        try {
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint + "/health"))
+                    .timeout(Duration.ofSeconds(5))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            return response.statusCode() == 200;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }
