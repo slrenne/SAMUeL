@@ -14,6 +14,7 @@ import org.samuel.tiling.Tile;
 import org.samuel.tiling.TileGrid;
 import org.samuel.tiling.TileManager;
 import org.samuel.ui.SAMUELDialog;
+import org.samuel.ui.SetupWizard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javafx.scene.control.Alert;
@@ -67,6 +68,14 @@ public class SAMUELCommand {
         SAMUELCommand command = new SAMUELCommand(quPathGUI);
         Action action = ActionTools.createAction(command::run, "Run SAM segmentation");
         MenuTools.addMenuItems(quPathGUI.getMenu("Extensions>SAMUeL", true), action);
+
+        Action setupAction = ActionTools.createAction(command::showSetupWizard, "Setup Wizard");
+        MenuTools.addMenuItems(quPathGUI.getMenu("Extensions>SAMUeL", true), setupAction);
+    }
+
+    private void showSetupWizard() {
+        SetupWizard wizard = new SetupWizard();
+        wizard.showAndWait();
     }
 
     private void run() {
@@ -122,7 +131,7 @@ public class SAMUELCommand {
                 TileGrid grid = tileManager.generateGrid(x, y, w, h, config.tileSize(), config.overlap());
                 for (Tile tile : grid.getTiles()) {
                     tileCount++;
-                    BufferedImage tileImage = server.readBufferedImage(
+                    BufferedImage tileImage = server.readRegion(
                             RegionRequest.createInstance(server.getPath(), 1.0, tile.x(), tile.y(), tile.width(), tile.height())
                     );
                     if (config.saveMasks()) {
@@ -218,8 +227,9 @@ public class SAMUELCommand {
             return;
         }
         if (config.autoStartBackend()) {
+            showAlert(Alert.AlertType.INFORMATION, "SAMUeL backend", "Attempting to start Python backend...");
             startBackendProcess(config);
-            for (int i = 0; i < 15; i++) {
+            for (int i = 0; i < 30; i++) {  // Increased timeout to 30 seconds
                 Thread.sleep(1000);
                 if (client.isHealthy()) {
                     showAlert(Alert.AlertType.INFORMATION, "SAMUeL backend", "Python backend started successfully.");
@@ -231,9 +241,19 @@ public class SAMUELCommand {
             }
         }
         String diagnostics = readBackendProcessOutput();
-        throw new IOException("Cannot reach SAM backend at " + config.backendUrl()
-                + ". Start it manually or enable Auto-start and verify Python executable/backend directory."
-                + (diagnostics.isBlank() ? "" : "\nBackend startup log:\n" + diagnostics));
+        String errorMsg = "Cannot reach SAM backend at " + config.backendUrl() + ".\n\n";
+        errorMsg += "Possible causes:\n";
+        errorMsg += "1. Python backend is not running\n";
+        errorMsg += "2. Wrong URL or port\n";
+        errorMsg += "3. Python dependencies not installed\n";
+        errorMsg += "4. SAM model weights not downloaded\n\n";
+        errorMsg += "Solutions:\n";
+        errorMsg += "- Run the Setup Wizard from Extensions > SAMUeL > Setup Wizard\n";
+        errorMsg += "- Or start manually: cd python-backend && python -m uvicorn server:app --host 127.0.0.1 --port 8000\n";
+        if (!diagnostics.isBlank()) {
+            errorMsg += "\nBackend startup log:\n" + diagnostics;
+        }
+        throw new IOException(errorMsg);
     }
 
     private void startBackendProcess(SAMUELDialog.Config config) throws IOException {

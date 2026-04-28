@@ -6,11 +6,11 @@ Segment Anything for Microscopy Using Labels.
 
 SAMUeL is a QuPath extension that runs Segment Anything (SAM) inference from annotation prompts and supports large whole-slide images by tiled processing. It includes:
 
-- A Java 17 QuPath extension with GUI configuration.
+- A Java 17 QuPath extension with user-friendly GUI configuration.
 - A FastAPI Python backend running SAM inference.
 - Prompt conversion from QuPath annotations.
 - Tile extraction, overlap-aware processing, and mask reconstruction.
-- Automatic output export plus manuscript-ready LaTeX report generation.
+- Automatic output export plus technical documentation generation.
 
 ## Installation
 
@@ -59,7 +59,19 @@ uvicorn server:app --host 127.0.0.1 --port 8000
 1. Build the project.
 2. Copy the generated JAR from `build/libs/` into the QuPath extensions directory.
 3. Restart QuPath.
-4. Use menu: `Extensions -> SAMUeL -> Run SAM segmentation`.
+4. Use menu: `Extensions -> SAMUeL -> Setup Wizard` to configure Python and download models.
+5. Use menu: `Extensions -> SAMUeL -> Run SAM segmentation`.
+
+## Setup Wizard
+
+The setup wizard helps you:
+
+- Locate your Python installation
+- Set the backend directory
+- Install Python dependencies automatically
+- Download SAM model weights
+
+Run it from `Extensions -> SAMUeL -> Setup Wizard` before first use.
 
 ## Usage guide
 
@@ -98,14 +110,43 @@ Prompt mapping:
 
 ## Results output
 
-Each run creates `~/SAMUeL-results/<timestamp>/` with:
+- QuPath objects (detections or annotations) with accurate polygon shapes.
+- Optional mask images and data saved to disk.
+- Technical documentation PDF generated with run statistics.
 
-- `tiles/`: extracted tile images.
-- `masks/`: serialized output masks.
-- `logs/`: run artifacts.
-- `manuscript/`: LaTeX files and compiled PDF.
+## Recent Improvements
 
-## Manuscript generation
+- **Accurate segmentation shapes**: Masks are now converted to precise polygon ROIs instead of bounding boxes.
+- **Enhanced GUI**: Organized settings with tooltips and collapsible sections.
+- **Setup Wizard**: Automated Python environment setup and SAM model downloads.
+- **Technical documentation**: Generates PDF reports describing the plugin usage and results.
+- **Bug fixes**: Fixed deprecated QuPath API usage and improved error handling for backend connections.
+
+## Troubleshooting
+
+### Backend Connection Issues
+
+If you see "Connection reset by peer" or "Cannot reach SAM backend":
+
+1. **Check if backend is running**: Open a browser to `http://127.0.0.1:8000/health`
+2. **Start backend manually**:
+   ```bash
+   cd python-backend
+   python -m venv .venv
+   .venv\Scripts\activate  # Windows
+   pip install -r requirements.txt
+   python -m uvicorn server:app --host 127.0.0.1 --port 8000
+   ```
+3. **Use Setup Wizard**: `Extensions > SAMUeL > Setup Wizard` to configure paths
+4. **Check Python version**: Ensure Python 3.10+ is used
+5. **Check dependencies**: Run `pip list` to verify torch, segment-anything are installed
+
+### Common Issues
+
+- **"No Python executable found"**: Set full path to python.exe in settings
+- **"Model weights not found"**: Models download automatically on first use (~2.5GB)
+- **"CUDA out of memory"**: Reduce tile size or disable GPU in settings
+- **"pdflatex not found"**: Install LaTeX for PDF generation (optional)
 
 When enabled:
 

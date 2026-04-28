@@ -17,32 +17,46 @@ def generate_manuscript(manuscript_dir: Path, stats: dict[str, Any]) -> None:
     )
     write_file(
         manuscript_dir / "methods.tex",
-        "\\section{Methods}\nThe pipeline performs prompt conversion, tile-based inference, and mask reconstruction.\n",
+        "\\section{Architecture}\n"
+        "The system includes:\n"
+        "\\begin{itemize}\n"
+        "\\item QuPath Java extension\n"
+        "\\item FastAPI Python backend\n"
+        "\\item Tile-based inference\n"
+        "\\item Mask reconstruction\n"
+        "\\end{itemize}\n",
     )
     write_file(
         manuscript_dir / "results.tex",
-        "\\section{Results}\n"
-        f"Processed tiles: {stats.get('tiles', 0)}\\\\\n"
-        f"Generated masks: {stats.get('masks', 0)}\\\\\n",
+        "\\section{Usage Statistics}\n"
+        f"Tiles processed: {stats.get('tiles', 0)}\\\\\n"
+        f"Objects generated: {stats.get('objects', 0)}\\\\\n",
     )
     write_file(
         manuscript_dir / "discussion.tex",
-        "\\section{Discussion}\nTile overlap mitigated edge artifacts in large WSI regions.\n",
+        "\\section{Technical Details}\n"
+        "SAM models supported: vit_h, vit_l, vit_b\\\\\n"
+        "Processing: Overlapping tile strategy\\\\\n"
+        "Output: QuPath-compatible objects\n",
     )
     write_file(
         manuscript_dir / "supplementary.tex",
-        "\\section*{Supplementary}\nExample masks and overlays are exported with this run.\n",
+        "\\section*{Configuration}\n"
+        "Backend: FastAPI on port 8000\\\\\n"
+        "Dependencies: PyTorch, segment-anything, OpenCV\\\\\n"
+        "Integration: HTTP REST API\n",
     )
     write_file(
         manuscript_dir / "references.bib",
-        "@article{sam2023,\n  title={Segment Anything},\n  author={Kirillov, A. and others},\n  year={2023}\n}\n",
+        "@article{sam2023,\n  title={Segment Anything},\n  author={Kirillov, A. and others},\n  year={2023}\n}\n"
+        "@software{qupath,\n  title={QuPath},\n  author={Bankhead, P. and others},\n  year={2017}\n}\n",
     )
     write_file(
         manuscript_dir / "manuscript.tex",
         "\\documentclass{article}\n"
         "\\usepackage[margin=1in]{geometry}\n"
         "\\begin{document}\n"
-        "\\title{SAMUeL Manuscript}\n\\maketitle\n"
+        "\\title{SAMUeL Technical Documentation}\n\\maketitle\n"
         "\\input{introduction.tex}\n"
         "\\input{methods.tex}\n"
         "\\input{results.tex}\n"

@@ -32,11 +32,18 @@ public class SAMClient {
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
-        HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() != 200) {
-            throw new IOException("SAM server error " + response.statusCode() + ": " + response.body());
+        try {
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new IOException("SAM server error " + response.statusCode() + ": " + response.body());
+            }
+            return objectMapper.readValue(response.body(), SAMResponse.class);
+        } catch (IOException e) {
+            if (e.getMessage().contains("Connection reset by peer") || e.getMessage().contains("bytes received: 0")) {
+                throw new IOException("Connection to SAM backend failed. The Python backend may not be running or may have crashed. Please check that the backend is started and accessible at " + endpoint, e);
+            }
+            throw e;
         }
-        return objectMapper.readValue(response.body(), SAMResponse.class);
     }
     
     public void printRequest(SAMRequest request) {

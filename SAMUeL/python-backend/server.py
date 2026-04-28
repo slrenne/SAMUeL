@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from manuscript_generator import generate_manuscript
@@ -48,15 +48,19 @@ def health() -> dict[str, str]:
 
 @app.post("/segment", response_model=SegmentResponse)
 def segment(req: SegmentRequest) -> SegmentResponse:
-    manager = get_manager(req.model_type, req.use_gpu)
-    payload = TileRequest(
-        tile_id=req.tile_id,
-        image_b64=req.image,
-        points=req.points,
-        boxes=req.boxes,
-    )
-    result = run_tile_inference(payload, manager)
-    return SegmentResponse(**result)
+    try:
+        manager = get_manager(req.model_type, req.use_gpu)
+        payload = TileRequest(
+            tile_id=req.tile_id,
+            image_b64=req.image,
+            points=req.points,
+            boxes=req.boxes,
+        )
+        result = run_tile_inference(payload, manager)
+        return SegmentResponse(**result)
+    except Exception as e:
+        LOGGER.error(f"Error processing segment request: {e}")
+        raise HTTPException(status_code=500, detail=f"Segmentation failed: {str(e)}")
 
 
 @app.post("/manuscript")
