@@ -16,7 +16,6 @@ public class SettingsPanel extends VBox {
     private final Spinner<Integer> minAreaSpinner = new Spinner<>(0, Integer.MAX_VALUE, 100, 10);
     private final CheckBox useGpuCheck = new CheckBox("Use GPU (if available)");
     private final CheckBox saveMasksCheck = new CheckBox("Save masks to disk");
-    private final CheckBox generateManuscriptCheck = new CheckBox("Generate LaTeX manuscript");
     private final ComboBox<String> outputTypeCombo = new ComboBox<>();
     private final ComboBox<String> targetModeCombo = new ComboBox<>();
     private final CheckBox usePromptClassCheck = new CheckBox("Use annotations with class 'Prompt' or 'prompt'");
@@ -67,9 +66,6 @@ public class SettingsPanel extends VBox {
         saveMasksCheck.setSelected(true);
         saveMasksCheck.setTooltip(new Tooltip("Save raw mask images and data for debugging"));
 
-        generateManuscriptCheck.setSelected(true);
-        generateManuscriptCheck.setTooltip(new Tooltip("Generate LaTeX manuscript with results (requires pdflatex)"));
-
         usePromptClassCheck.setText("Use annotations with class 'Prompt' or 'prompt'");
         usePromptClassCheck.setSelected(true);
         usePromptClassCheck.setTooltip(new Tooltip("Use annotations labeled as prompts instead of selected objects"));
@@ -115,7 +111,6 @@ public class SettingsPanel extends VBox {
         grid.add(new Label("Output type:"), 0, 0);
         grid.add(outputTypeCombo, 1, 0);
         grid.add(saveMasksCheck, 1, 1);
-        grid.add(generateManuscriptCheck, 1, 2);
         return grid;
     }
 
@@ -156,10 +151,6 @@ public class SettingsPanel extends VBox {
 
     public boolean isSaveMasks() {
         return saveMasksCheck.isSelected();
-    }
-
-    public boolean isGenerateManuscript() {
-        return generateManuscriptCheck.isSelected();
     }
 
     public String getOutputType() {

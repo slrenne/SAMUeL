@@ -148,7 +148,7 @@ public class SetupWizard extends Dialog<Void> {
                 java.nio.file.Path targetDir = java.nio.file.Paths.get(backendDirField.getText().trim());
                 java.nio.file.Files.createDirectories(targetDir);
 
-                String[] files = {"server.py", "sam_model.py", "tile_inference.py", "manuscript_generator.py", "requirements.txt"};
+                String[] files = {"server.py", "sam_model.py", "tile_inference.py", "requirements.txt"};
                 for (String file : files) {
                     try (java.io.InputStream inputStream = getClass().getResourceAsStream("/python-backend/" + file)) {
                         if (inputStream != null) {

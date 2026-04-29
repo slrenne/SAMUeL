@@ -5,7 +5,6 @@ import org.controlsfx.control.action.Action;
 import org.samuel.inference.SAMClient;
 import org.samuel.inference.SAMRequest;
 import org.samuel.inference.SAMResponse;
-import org.samuel.manuscript.ManuscriptGenerator;
 import org.samuel.objects.MaskDecoder;
 import org.samuel.objects.MaskToPathObject;
 import org.samuel.prompts.AnnotationPromptConverter;
@@ -18,7 +17,9 @@ import org.samuel.ui.SetupWizard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javafx.scene.control.Alert;
+import javafx.scene.control.TextInputDialog;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.objects.classes.PathClass;
 import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.tools.MenuTools;
 import qupath.lib.images.ImageData;
@@ -95,6 +96,22 @@ public class SAMUELCommand {
                 return;
             }
             var config = configOpt.get();
+
+            // Ask user what is being segmented
+            TextInputDialog classificationDialog = new TextInputDialog("cell");
+            classificationDialog.setTitle("SAMUeL Classification");
+            classificationDialog.setHeaderText("What are we segmenting?");
+            classificationDialog.setContentText("Enter the classification name for detected objects:");
+            var classificationOpt = classificationDialog.showAndWait();
+            if (classificationOpt.isEmpty()) {
+                return;
+            }
+            String classificationName = classificationOpt.get().trim();
+            if (classificationName.isEmpty()) {
+                classificationName = "cell";
+            }
+            var pathClass = PathClass.getInstance(classificationName);
+
             List<PathObject> prompts = resolvePrompts(config, annotations, hierarchy);
             List<PathObject> targets = resolveTargets(config, annotations, imageData, hierarchy);
             if (targets.isEmpty()) {
@@ -134,15 +151,18 @@ public class SAMUELCommand {
                     BufferedImage tileImage = server.readRegion(
                             RegionRequest.createInstance(server.getPath(), 1.0, tile.x(), tile.y(), tile.width(), tile.height())
                     );
+                    logger.debug("Processing tile {}: position ({}, {}), size {}x{}", tile.id(), tile.x(), tile.y(), tile.width(), tile.height());
                     if (config.saveMasks()) {
                         ImageIO.write(tileImage, "png", tilesDir.resolve(tile.id() + ".png").toFile());
                     }
                     SAMRequest request = buildRequest(tile, tileImage, promptBuilder, config);
                     SAMResponse response = client.segment(request);
                     for (SAMResponse.MaskPayload payload : response.getMasks()) {
+                        logger.debug("Received mask: {}x{}, score: {}", payload.getWidth(), payload.getHeight(), payload.getScore());
                         boolean[][] mask = decoder.decode(payload.getData(), payload.getWidth(), payload.getHeight());
                         for (PathObject pathObject : converterToObject.convert(mask, tile.x(), tile.y(), config.outputType(), config.minMaskArea())) {
-                            hierarchy.addObject(pathObject);
+                            pathObject.setPathClass(pathClass);
+                            hierarchy.addObjectBelowParent(target, pathObject, true);
                             objectCount++;
                         }
                         if (config.saveMasks()) {
@@ -150,10 +170,6 @@ public class SAMUELCommand {
                         }
                     }
                 }
-            }
-
-            if (config.generateManuscript()) {
-                new ManuscriptGenerator().generate(manuscriptDir, Map.of("tiles", tileCount, "objects", objectCount));
             }
 
             logger.info("SAMUeL finished with {} tiles and {} objects", tileCount, objectCount);

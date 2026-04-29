@@ -6,7 +6,6 @@ from typing import Any
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from manuscript_generator import generate_manuscript
 from sam_model import SAMModelManager
 from tile_inference import TileRequest, run_tile_inference
 
@@ -52,10 +51,3 @@ def segment(req: SegmentRequest) -> SegmentResponse:
     )
     result = run_tile_inference(payload, manager)
     return SegmentResponse(**result)
-
-
-@app.post("/manuscript")
-def manuscript(stats: dict[str, Any]) -> dict[str, str]:
-    out = Path(stats.get("output_dir", "results")) / "manuscript"
-    generate_manuscript(out, stats)
-    return {"status": "ok", "path": str(out)}

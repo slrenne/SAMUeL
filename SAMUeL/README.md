@@ -20,7 +20,6 @@ SAMUeL is a QuPath extension that runs Segment Anything (SAM) inference from ann
 - Gradle 8+
 - QuPath 0.5.x
 - Python 3.10+
-- `pdflatex` in PATH (optional but recommended for PDF generation)
 
 ### Build extension
 
@@ -89,7 +88,7 @@ Run it from `Extensions -> SAMUeL -> Setup Wizard` before first use. The wizard 
 - `org.samuel.prompts`: QuPath annotation to SAM prompt conversion.
 - `org.samuel.inference`: REST request/response + HTTP client.
 - `org.samuel.objects`: mask decoding and QuPath object creation.
-- `python-backend/`: SAM inference server and manuscript tooling.
+- `python-backend/`: SAM inference server.
 
 ## Tiling strategy
 
@@ -146,12 +145,3 @@ If you see "Connection reset by peer" or "Cannot reach SAM backend":
 - **"No Python executable found"**: Set full path to python.exe in settings
 - **"Model weights not found"**: Models download automatically on first use (~2.5GB)
 - **"CUDA out of memory"**: Reduce tile size or disable GPU in settings
-- **"pdflatex not found"**: Install LaTeX for PDF generation (optional)
-
-When enabled:
-
-- Generates `introduction.tex`, `methods.tex`, `results.tex`, `discussion.tex`, `supplementary.tex`, `references.bib`, `manuscript.tex`.
-- Populates `results.tex` with run statistics.
-- Executes `pdflatex manuscript.tex`.
-
-Template files are provided in `templates/manuscript/`.
