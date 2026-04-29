@@ -67,11 +67,11 @@ uvicorn server:app --host 127.0.0.1 --port 8000
 The setup wizard helps you:
 
 - Locate your Python installation
-- Set the backend directory
+- Set the backend directory (files are copied automatically)
 - Install Python dependencies automatically
 - Download SAM model weights
 
-Run it from `Extensions -> SAMUeL -> Setup Wizard` before first use.
+Run it from `Extensions -> SAMUeL -> Setup Wizard` before first use. The wizard will copy the required Python backend files to your chosen directory.
 
 ## Usage guide
 
@@ -128,16 +128,16 @@ Prompt mapping:
 
 If you see "Connection reset by peer" or "Cannot reach SAM backend":
 
-1. **Check if backend is running**: Open a browser to `http://127.0.0.1:8000/health`
-2. **Start backend manually**:
+1. **Use Setup Wizard first**: `Extensions > SAMUeL > Setup Wizard` to configure paths and copy backend files
+2. **Check if backend is running**: Open a browser to `http://127.0.0.1:8000/health`
+3. **Start backend manually**:
    ```bash
-   cd python-backend
+   cd python-backend  # or your configured backend directory
    python -m venv .venv
    .venv\Scripts\activate  # Windows
    pip install -r requirements.txt
    python -m uvicorn server:app --host 127.0.0.1 --port 8000
    ```
-3. **Use Setup Wizard**: `Extensions > SAMUeL > Setup Wizard` to configure paths
 4. **Check Python version**: Ensure Python 3.10+ is used
 5. **Check dependencies**: Run `pip list` to verify torch, segment-anything are installed
 

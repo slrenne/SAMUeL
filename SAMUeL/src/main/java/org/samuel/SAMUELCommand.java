@@ -242,14 +242,30 @@ public class SAMUELCommand {
         }
         String diagnostics = readBackendProcessOutput();
         String errorMsg = "Cannot reach SAM backend at " + config.backendUrl() + ".\n\n";
+
+        // Check backend directory
+        try {
+            Path backendDir = resolveBackendDirectory(config.backendDir());
+            boolean hasServerPy = Files.exists(backendDir.resolve("server.py"));
+            boolean hasRequirements = Files.exists(backendDir.resolve("requirements.txt"));
+            errorMsg += "Backend directory: " + backendDir + "\n";
+            errorMsg += "Has server.py: " + hasServerPy + "\n";
+            errorMsg += "Has requirements.txt: " + hasRequirements + "\n\n";
+        } catch (Exception e) {
+            errorMsg += "Error resolving backend directory: " + e.getMessage() + "\n\n";
+        }
+
         errorMsg += "Possible causes:\n";
         errorMsg += "1. Python backend is not running\n";
         errorMsg += "2. Wrong URL or port\n";
         errorMsg += "3. Python dependencies not installed\n";
-        errorMsg += "4. SAM model weights not downloaded\n\n";
+        errorMsg += "4. Backend directory doesn't contain required files\n";
+        errorMsg += "5. Python executable path is incorrect\n\n";
         errorMsg += "Solutions:\n";
-        errorMsg += "- Run the Setup Wizard from Extensions > SAMUeL > Setup Wizard\n";
-        errorMsg += "- Or start manually: cd python-backend && python -m uvicorn server:app --host 127.0.0.1 --port 8000\n";
+        errorMsg += "- Use the Setup Wizard to configure paths\n";
+        errorMsg += "- Copy python-backend files to your configured directory\n";
+        errorMsg += "- Install dependencies: pip install -r requirements.txt\n";
+        errorMsg += "- Start manually: python -m uvicorn server:app --host 127.0.0.1 --port 8000\n";
         if (!diagnostics.isBlank()) {
             errorMsg += "\nBackend startup log:\n" + diagnostics;
         }
@@ -275,6 +291,8 @@ public class SAMUELCommand {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(backendDir.toFile());
         pb.redirectErrorStream(true);
+
+        logger.info("Starting backend with command: {} in directory: {}", String.join(" ", command), backendDir);
         lastBackendProcess = pb.start();
     }
 
@@ -444,17 +462,28 @@ public class SAMUELCommand {
 
     private Path extractBundledBackend() throws IOException {
         String[] files = {"server.py", "sam_model.py", "tile_inference.py", "manuscript_generator.py", "requirements.txt"};
-        Path tempDir = Files.createTempDirectory("samuel-python-backend-");
+        Path backendDir = Paths.get(System.getProperty("user.home"), ".samuel", "python-backend");
+        Files.createDirectories(backendDir);
+
+        boolean needsExtraction = false;
         for (String file : files) {
-            try (InputStream inputStream = SAMUELCommand.class.getResourceAsStream("/python-backend/" + file)) {
-                if (inputStream == null) {
-                    throw new IOException("Missing bundled backend resource: " + file);
-                }
-                Files.copy(inputStream, tempDir.resolve(file));
+            if (!Files.exists(backendDir.resolve(file))) {
+                needsExtraction = true;
+                break;
             }
         }
-        tempDir.toFile().deleteOnExit();
-        return tempDir;
+
+        if (needsExtraction) {
+            for (String file : files) {
+                try (InputStream inputStream = SAMUELCommand.class.getResourceAsStream("/python-backend/" + file)) {
+                    if (inputStream == null) {
+                        throw new IOException("Missing bundled backend resource: " + file);
+                    }
+                    Files.copy(inputStream, backendDir.resolve(file));
+                }
+            }
+        }
+        return backendDir;
     }
 
     private String[] parseHostPort(String backendUrl) {

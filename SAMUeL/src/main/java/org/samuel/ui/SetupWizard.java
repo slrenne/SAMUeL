@@ -136,16 +136,35 @@ public class SetupWizard extends Dialog<Void> {
     }
 
     private void performSetup() {
-        // This would trigger the setup process
-        // For now, just show a message
         String message = "Setup configuration:\n";
         message += "Python: " + pythonPathField.getText() + "\n";
         message += "Backend: " + backendDirField.getText() + "\n";
         message += "Install deps: " + installDepsCheck.isSelected() + "\n";
         message += "Download models: " + downloadModelsCheck.isSelected() + "\n\n";
 
+        // Copy backend files if directory is specified
+        if (!backendDirField.getText().trim().isEmpty()) {
+            try {
+                java.nio.file.Path targetDir = java.nio.file.Paths.get(backendDirField.getText().trim());
+                java.nio.file.Files.createDirectories(targetDir);
+
+                String[] files = {"server.py", "sam_model.py", "tile_inference.py", "manuscript_generator.py", "requirements.txt"};
+                for (String file : files) {
+                    try (java.io.InputStream inputStream = getClass().getResourceAsStream("/python-backend/" + file)) {
+                        if (inputStream != null) {
+                            java.nio.file.Files.copy(inputStream, targetDir.resolve(file), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                            message += "Copied " + file + " to " + targetDir + "\n";
+                        }
+                    }
+                }
+                message += "\nBackend files copied successfully!\n";
+            } catch (Exception e) {
+                message += "Error copying backend files: " + e.getMessage() + "\n";
+            }
+        }
+
         if (installDepsCheck.isSelected()) {
-            message += "To install dependencies manually:\n";
+            message += "\nTo install dependencies manually:\n";
             message += "1. Create virtual environment: " + pythonPathField.getText() + " -m venv .venv\n";
             message += "2. Activate: .venv\\Scripts\\Activate.ps1 (Windows) or source .venv/bin/activate (Linux/Mac)\n";
             message += "3. Install: pip install -r requirements.txt\n";
@@ -156,7 +175,7 @@ public class SetupWizard extends Dialog<Void> {
         }
 
         message += "\nTo start the backend manually:\n";
-        message += "cd " + backendDirField.getText() + "\n";
+        message += "cd \"" + backendDirField.getText() + "\"\n";
         message += pythonPathField.getText() + " -m uvicorn server:app --host 127.0.0.1 --port 8000\n";
 
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
